@@ -1,2 +1,5 @@
 # Async runtime helpers (asyncio/json are provided by the stdlib).
 uvloop==0.19.0; platform_system != "Windows"
+
+# llama.cpp Python bindings (will build from source on unsupported archs).
+llama-cpp-python==0.2.76

@@ -53,9 +53,7 @@ class BrokerServer:
                     await writer.drain()
                     continue
 
-                response = await self._dispatch(request)
-                writer.write(encode_message(response))
-                await writer.drain()
+                await self._process_request(request, writer)
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
             raise
         except Exception:
@@ -65,16 +63,52 @@ class BrokerServer:
             await writer.wait_closed()
             LOGGER.debug("Client disconnected: %s", peer)
 
-    async def _dispatch(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_request(self, request: Dict[str, Any], writer: asyncio.StreamWriter) -> None:
         """Route incoming requests to the right handler."""
         kind = request.get("type", "completion")
         if kind == "ping":
-            return {"type": "pong"}
+            writer.write(encode_message({"type": "pong"}))
+            await writer.drain()
+            return
+        if kind != "completion":
+            writer.write(encode_message({"type": "error", "message": "unknown_request"}))
+            await writer.drain()
+            return
 
+        await self._handle_completion(request, writer)
+
+    async def _handle_completion(self, request: Dict[str, Any], writer: asyncio.StreamWriter) -> None:
         prompt = request.get("prompt") or ""
-        params = request.get("params") or {}
-        result = await self.model_manager.generate(prompt, **params)
-        return {"type": "completion", "result": result}
+        params = dict(request.get("params") or {})
+        stream_flag = request.get("stream")
+        if stream_flag is None:
+            stream = bool(params.pop("stream", True))
+        else:
+            stream = bool(stream_flag)
+            params.pop("stream", None)
+
+        if stream:
+            await self._stream_completion(prompt, params, writer)
+        else:
+            result = await self.model_manager.generate(prompt, **params)
+            writer.write(encode_message({"type": "completion", "result": result}))
+            await writer.drain()
+
+    async def _stream_completion(
+        self,
+        prompt: str,
+        params: Dict[str, Any],
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        tokens: list[str] = []
+        async for index, token in self.model_manager.stream_tokens(prompt, **params):
+            tokens.append(token)
+            writer.write(encode_message({"type": "token", "index": index, "token": token}))
+            await writer.drain()
+
+        result = self.model_manager.format_result(prompt, params, "".join(tokens))
+        writer.write(encode_message({"type": "completion", "result": result}))
+        await writer.drain()
 
     @staticmethod
     def _format_socket(sock: Any) -> str:

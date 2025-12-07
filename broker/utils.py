@@ -4,12 +4,29 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 
 def read_env(key: str, default: str) -> str:
     """Return environment variable values with a simple default."""
     return os.environ.get(key, default)
+
+
+def read_env_int(key: str, default: int) -> int:
+    """Read an integer environment variable with a fallback."""
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def resolve_models_dir(default: str = "./models") -> Path:
+    """Resolve the models directory location."""
+    return Path(read_env("MODELS_DIR", default)).expanduser().resolve()
 
 
 def encode_message(payload: Dict[str, Any]) -> bytes:
