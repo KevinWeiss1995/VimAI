@@ -1,0 +1,74 @@
+# .cursorrules for CodeSage - Vim AI Assistant
+
+project:
+  name: CodeSage
+  root: .
+  type: python
+  description: |
+    Local AI-powered Vim assistant for code generation, refactoring,
+    and explanation. Supports x86_64 and ARM64, CPU or GPU execution.
+
+environment:
+  python: python3
+  pythonPath: ./broker/venv/bin/python
+  variables:
+    MODELS_DIR: ./models
+    BROKER_HOST: 127.0.0.1
+    BROKER_PORT: 5555
+
+build:
+  commands:
+    - name: Install Python dependencies
+      command: pip install -r ./broker/requirements.txt
+    - name: Build llama.cpp
+      command: ./scripts/build_llama_cpp.sh
+    - name: Download models
+      command: ./scripts/download_models.sh
+
+run:
+  default:
+    command: ./scripts/start_broker.sh
+    args:
+      - --host
+      - ${BROKER_HOST}
+      - --port
+      - ${BROKER_PORT}
+  debug:
+    command: ${python} -m debugpy --listen 5678 ./broker/main.py
+    args:
+      - --host
+      - ${BROKER_HOST}
+      - --port
+      - ${BROKER_PORT}
+
+editor:
+  type: vim
+  plugin_dir: ./vim_plugin/plugin
+  lua_dir: ./vim_plugin/lua
+  commands:
+    - AI
+    - AIRefactor
+    - AIExplain
+    - AIUnitTest
+
+models:
+  default: code-llama-7b.gguf
+  supported:
+    - code-llama-7b.gguf
+    - mistral-7b.gguf
+    - phi-3-mini.gguf
+
+platforms:
+  supported:
+    - x86_64
+    - aarch64
+  gpu:
+    cuda: true
+    tensorRT: true
+
+notes:
+  - Ensure Python >= 3.10
+  - Make sure llama.cpp is built for your architecture
+  - Models must reside in ${MODELS_DIR}
+  - Broker must be running before Vim plugin commands
+

@@ -1,0 +1,160 @@
+# CodeSage - Vim AI Assistant
+# STEPS.txt
+# This file outlines the recommended development steps for building and deploying CodeSage.
+# Testing checkpoints are included to ensure each stage works before progressing.
+
+=============================================================
+STEP 0 — Prep Your Environment
+=============================================================
+1. Install build tools on RHEL:
+   sudo yum groupinstall "Development Tools"
+   sudo yum install cmake git python3 python3-venv python3-pip
+2. Install CUDA if a GPU is available.
+3. Install Neovim (optional, for Lua async plugin support).
+4. Decide on the GGUF models directory: ./models
+
+# TEST
+- Check Python version: python3 --version
+- Check cmake version: cmake --version
+- Check nvcc (CUDA) if GPU: nvcc --version
+
+=============================================================
+STEP 1 — Scaffold the Project
+=============================================================
+1. Run mkdir + touch script to create directories and placeholder files.
+2. Initialize git:
+   git init
+   git add .
+   git commit -m "Initial scaffold for CodeSage project"
+3. Add basic README.md, LICENSE, and scripts.
+
+# TEST
+- Verify directory structure matches intended layout
+- Ensure git repository is initialized and files are tracked
+
+=============================================================
+STEP 2 — Setup the Broker
+=============================================================
+1. Create Python virtual environment inside broker/:
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install --upgrade pip
+2. Add basic requirements.txt for async support:
+   asyncio
+   json
+3. Implement minimal main.py: listens on localhost:5555, echoes requests.
+4. Test broker independently:
+   python broker/main.py
+
+# TEST
+- Run broker and verify it starts without errors
+- Use a Python client to send a test JSON message and confirm echo response
+
+=============================================================
+STEP 3 — Integrate llama.cpp
+=============================================================
+1. Clone llama.cpp submodule:
+   git submodule add https://github.com/ggerganov/llama.cpp.git llama_cpp
+2. Build llama.cpp:
+   cd llama_cpp
+   cmake . && make
+3. Download small GGUF model for testing (e.g., Phi-3-mini).
+4. Test inference directly:
+   ./main -m models/phi-3-mini.gguf -p "Hello"
+
+# TEST
+- Verify llama.cpp builds cleanly on both x86_64 and ARM64
+- Run a test prompt and ensure valid token output
+
+=============================================================
+STEP 4 — Connect Broker to Model Backend
+=============================================================
+1. Implement model_manager.py to select model and device (CPU/GPU).
+2. Implement token streaming in handlers.py.
+3. Test with Python client before connecting Vim.
+
+# TEST
+- Send sample prompts via broker and verify streamed token output
+- Ensure CPU and GPU backends both produce consistent results
+
+=============================================================
+STEP 5 — Vim Plugin Integration
+=============================================================
+1. Implement minimal VimL command (:AI) that calls broker via job_start.
+2. Implement Neovim Lua async callback for streaming tokens.
+3. Test inserting token streams in buffer.
+4. Add commands like :AIRefactor, :AIExplain.
+
+# TEST
+- Execute :AI command in Vim and confirm tokens appear correctly
+- Test multiple simultaneous requests and buffer updates
+
+=============================================================
+STEP 6 — Add Models and Multi-Backend Support
+=============================================================
+1. Place code-llama-7b.gguf and mistral-7b.gguf in models/.
+2. Update model_manager.py to choose best model based on hardware/context.
+3. Test Jetson ARM64 vs x86 GPU and CPU-only modes.
+4. Quantize models if needed for performance.
+
+# TEST
+- Switch between models and verify output
+- Confirm GPU/CPU selection works correctly
+- Ensure quantized models produce valid output
+
+=============================================================
+STEP 7 — User Experience & Streaming
+=============================================================
+1. Stream token output with minimal latency.
+2. Implement buffer markers for patches (<<<AI_EDIT_START>>>).
+3. Add command flags: max tokens, temperature, stop sequences.
+4. Optional: cache embeddings per file for faster repeated edits.
+
+# TEST
+- Confirm streaming works with real-time insertion in Vim
+- Verify patches are applied correctly in buffer
+- Test edge cases like very long prompts
+
+=============================================================
+STEP 8 — Testing and Packaging
+=============================================================
+1. Write unit tests for broker functions and model manager.
+2. Write integration tests for Vim plugin commands.
+3. Package as RPM or Docker image for enterprise deployment.
+4. Ensure cross-platform compatibility (x86_64 + aarch64).
+
+# TEST
+- Run all unit and integration tests
+- Verify Docker or RPM builds correctly and runs the broker
+
+=============================================================
+STEP 9 — Optional: API Fallback
+=============================================================
+1. Implement optional API backend in model_manager.py (OpenAI, Mistral Cloud, etc.).
+2. Only used when local models aren’t suitable (very large context or heavy reasoning).
+
+# TEST
+- Test API fallback path and ensure it streams correctly
+- Confirm that local models remain default and API is optional
+
+=============================================================
+STEP 10 — Iteration & Polishing
+=============================================================
+1. Add multiple LLM models dynamically.
+2. Add advanced commands: :AIUnitTest, :AIExplain.
+3. Add project-aware features: repository context, embeddings, retrieval.
+4. Improve streaming speed, token batching, and Vim UI.
+5. Make the assistant fully robust and user-friendly.
+
+# TEST
+- Perform end-to-end workflow: prompt → model → Vim buffer insert
+- Test large files, multiple files, and simultaneous edits
+- Verify cross-platform behavior on x86_64 and ARM64
+
+=============================================================
+RULE OF THUMB FOR PROGRESSION
+=============================================================
+Scaffold → Broker skeleton → Model backend → Vim plugin → Multi-model + hardware detection
+→ Streaming UI → Testing → Packaging → Optional cloud fallback → Feature polish
+Always run tests at the end of each step before moving forward.
+
